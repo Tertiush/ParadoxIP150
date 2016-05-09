@@ -319,6 +319,8 @@ if __name__ == '__main__':
 
     AlarmStatus = [None] * TotalZones
 
+    SirenStatus = "empty"
+
     start_time = time.time()
 
     print "Connected and polling data every " + str(Poll_Speed) + "s"
@@ -376,8 +378,10 @@ if __name__ == '__main__':
 
         SirenStatusRead = (data.split('tbl_alarmes = new Array('))[1].split(')')[0]
 
-        if len(SirenStatusRead) != 0:
+        if SirenStatusRead != SirenStatus:
             client.publish("Paradox/SS", str(SirenStatusRead), qos=0, retain=False)
+            SirenStatus = SirenStatusRead
+
 
 
         #print "Polling (i=", i, ") - , Zones: " + zones + " - ", AlarmStatus
