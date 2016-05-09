@@ -1,6 +1,8 @@
 # Paradox IP150-MQTT
 Python-based IP150 interrogator that publishes data and subscribes to control commands to and from an MQTT broker, without using a headless browser.
 
+<b>NB: This is still a very early release and has its bugs</b>
+
 ## Steps to use it:
 1.  Tested with Python 2.7.10
 2.  Download the files in this repository and place it in some directory
