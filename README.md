@@ -41,7 +41,7 @@ If successfully connected to your IP150 and MQTT broker, the app will start off 
 ## Running as a service / daemon
 
 ### On Mac
-( thanks @Rtaxerxes )
+( thanks [@Rtaxerxes](https://github.com/Rtaxerxes) )
 
 If you want to run this as a daemon on Mac, 
  1. Create a file called local.paradox.plist.
