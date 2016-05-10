@@ -157,6 +157,7 @@ def connect_ip150login():
             socketclient.send("GET /login_page.html HTTP/1.1\r\n\r\n")
             data = socketclient.recv(4096)
             data += socketclient.recv(4096)
+            data += socketclient.recv(4096)
             ses = (data.split('loginaff("'))[1].split('",')[0]
             if len(ses) == 16:
                 print "SES Key Found: ", ses
@@ -173,6 +174,8 @@ def connect_ip150login():
             socketclient.close()
             if got_ses == 0:
                 print "Failure, cannot connect"
+                print "Last received data: "
+                print data
                 sys.exit()
             time.sleep(2)
             socketclient = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
