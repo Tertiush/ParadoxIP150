@@ -37,3 +37,36 @@ If successfully connected to your IP150 and MQTT broker, the app will start off 
     * <b>Paradox/C/Polling/Disable</b>
     * The payload is not evaluated
 
+
+## Running as a service / daemon
+
+### On Mac
+( thanks @Rtaxerxes )
+
+If you want to run this as a daemon on Mac, 
+ 1. Create a file called local.paradox.plist.
+ 2. Copy and paste the below into the file, editing for the location of your files.
+ 3. Copy the file to /Library/LaunchDaemons/.
+ 4. Run it with: sudo launchctl load /Library/LaunchDaemons/local.paradox.plist
+ 5. Stop it with: sudo launchctl unload /Library/LaunchDaemons/local.paradox.plist
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>Label</key>
+            <string>local.paradox</string>
+        <key>WorkingDirectory</key>
+            <string>/(folder where files are)</string>
+        <key>ProgramArguments</key>
+        <array>
+            <string>/usr/bin/python</string>
+            <string>/(folder where files are)/IP150-MQTT.py</string>
+        </array>
+        <key>RunAtLoad</key>
+            <true/>
+    </dict>
+</plist>
+```
+
