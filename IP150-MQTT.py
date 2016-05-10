@@ -24,7 +24,8 @@ MQTT_Control_Subscribe = "Paradox/C/"       #e.g. To arm partition 1: Paradox/C/
 Control_Action = 0
 Control_Partition = ""
 Control_NewState = ""
-
+State_Machine = 0
+Polling_Enabled = 1
 
 def ConfigSectionMap(section):
     dict1 = {}
@@ -107,6 +108,7 @@ def on_message(client, userdata, msg):
     global Control_Partition
     global Control_NewState
     global Control_Action
+    global Polling_Enabled
 
     valid_states = ['Arm','Disarm','Sleep','Stay']
 
@@ -115,26 +117,36 @@ def on_message(client, userdata, msg):
     topic = msg.topic
 
     if MQTT_Control_Subscribe in msg.topic:
-        try:
-            Control_Partition = (topic.split(MQTT_Control_Subscribe + 'P'))[1].split('/')[0]
-            print "Control Partition: ", Control_Partition
-            Control_NewState = (topic.split('/P'+Control_Partition+'/'))[1]
-            print "Control's New State: ", Control_NewState
+        if "Polling" in msg.topic:
+            if "Enable" in msg.topic:
+                print "Enable polling message received..."
+                Polling_Enabled = 1
+            if "Disable" in msg.topic:
+                print "Disable polling message received..."
+                Polling_Enabled = 0
+        else:
+            try:
+                Control_Partition = (topic.split(MQTT_Control_Subscribe + 'P'))[1].split('/')[0]
+                print "Control Partition: ", Control_Partition
+                Control_NewState = (topic.split('/P'+Control_Partition+'/'))[1]
+                print "Control's New State: ", Control_NewState
 
-            if Control_NewState == "Arm":
-                Control_NewState = 'r'
-            elif Control_NewState == "Disarm":
-                Control_NewState = 'd'
-            elif Control_NewState == "Sleep":
-                Control_NewState = 'p'
-            elif Control_NewState == "Stay":
-                Control_NewState = 's'
-            else:
-                raise
+                if Control_NewState == "Arm":
+                    Control_NewState = 'r'
+                elif Control_NewState == "Disarm":
+                    Control_NewState = 'd'
+                elif Control_NewState == "Sleep":
+                    Control_NewState = 'p'
+                elif Control_NewState == "Stay":
+                    Control_NewState = 's'
+                else:
+                    raise
 
-            Control_Action = 1
-        except:
-            print "MQTT message received within incorrect structure"
+                Control_Action = 1
+            except:
+                print "MQTT message received within incorrect structure"
+
+
 
 def connect_ip150socket(address,port):
 
@@ -154,11 +166,9 @@ def connect_ip150login():
     while got_ses != 0:
         try:
             socketclient = connect_ip150socket(IP150_IP, IP150_Port)
-            socketclient.send("GET /login_page.html HTTP/1.1\r\n\r\n")
-            data = socketclient.recv(4096)
-            data += socketclient.recv(4096)
-            data += socketclient.recv(4096)
-            ses = (data.split('loginaff("'))[1].split('",')[0]
+            data_read, socketclient = connect_ip150readData(socketclient, "GET /login_page.html HTTP/1.1\r\n\r\n")
+
+            ses = (data_read.split('loginaff("'))[1].split('",')[0]
             if len(ses) == 16:
                 print "SES Key Found: ", ses
                 got_ses = 0
@@ -175,15 +185,14 @@ def connect_ip150login():
             if got_ses == 0:
                 print "Failure, cannot connect"
                 print "Last received data: "
-                print data
+                print data_read
+                print "******************* Attempting to login again *******************"
                 sys.exit()
             time.sleep(2)
-            socketclient = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            socketclient.settimeout(2)
-            socketclient.connect((IP150_IP, IP150_Port))
-            socketclient.send("GET /logout.html HTTP/1.1\r\nHost: " + IP150_IP + ':' + str(IP150_Port) + "\r\nConnection: keep-alive\r\nCache-Control: max-age=0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nUpgrade-Insecure-Requests: 1\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.94 Safari/537.36\r\nAccept-Encoding: gzip, deflate, sdch\r\nAccept-Language: en,af;q=0.8,en-GB;q=0.6\r\n\r\n")
-            data = socketclient.recv(4096)
-            if "200 OK" in data:
+
+            socketclient = connect_ip150socket(IP150_IP, IP150_Port)
+            data_read, socketclient = connect_ip150readData(socketclient, "GET /logout.html HTTP/1.1\r\nHost: " + IP150_IP + ':' + str(IP150_Port) + "\r\nConnection: keep-alive\r\nCache-Control: max-age=0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nUpgrade-Insecure-Requests: 1\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.94 Safari/537.36\r\nAccept-Encoding: gzip, deflate, sdch\r\nAccept-Language: en,af;q=0.8,en-GB;q=0.6\r\n\r\n")
+            if "200 OK" in data_read:
                 print "Disconnect OK received from IP Module"
             socketclient.close()
 
@@ -248,7 +257,7 @@ def connect_ip150readData(socketclient, request):
             tries = 0
 
         except Exception, e:
-            print "Error reading data from IP module, retrying (" + str(tries) + "): " + repr(e)
+            print "Error reading data from IP module, retrying again... (" + str(tries) + "): " + repr(e)
             tries = tries - 1
             socketclient.close
             time.sleep(2)
@@ -260,146 +269,232 @@ def connect_ip150readData(socketclient, request):
 
 if __name__ == '__main__':
 
-    Config = ConfigParser.ConfigParser()
-    Config.read("config.ini")
-    passw = Config.get("IP150","Password")
-    user = Config.get("IP150","Pincode")
-    IP150_IP = Config.get("IP150","IP")
-    IP150_Port = int(Config.get("IP150","HTTP_Port"))
-
-    MQTT_IP = Config.get("MQTT Broker","IP")
-    MQTT_Port = int(Config.get("MQTT Broker","Port"))
-
-
-    #print ConfigSectionMap("IP150")
-    #IP150_IP = ConfigSectionMap("IP150")['IP']
-
-    u,p,s = connect_ip150login()
-
-
-
-    # --------------MQTT----------------
-
-    client = mqtt.Client()
-    client.on_connect = on_connect
-    client.on_message = on_message
-
-    client.connect(MQTT_IP, MQTT_Port, MQTT_KeepAlive)
-
-    # Blocking call that processes network traffic, dispatches callbacks and
-    # handles reconnecting.
-    # Other loop*() functions are available that give a threaded interface and a
-    # manual interface.
-    # client.loop_forever()
-
-    # client.disconnect()
-
-    client.loop_start()
-
-    client.subscribe(MQTT_Control_Subscribe + "#")
-    # --------------MQTT----------------
-
-    s.close()
-    # Get zone definitions
-    print "Get zone definitions"
-    s = connect_ip150socket(IP150_IP, IP150_Port)
-
-    data, s = connect_ip150readData(s, "GET /index.html HTTP/1.1\r\nHost: " + IP150_IP + ':' + str(IP150_Port) + "\r\nConnection: keep-alive\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nUpgrade-Insecure-Requests: 1\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.94 Safari/537.36\r\nReferer: http://" + IP150_IP + ':' + str(IP150_Port) + "/default.html?u=" + u + "&p=" + p + "\r\nAccept-Encoding: gzip, deflate, sdch\r\nAccept-Language: en,af;q=0.8,en-GB;q=0.6\r\n\r\n")
-    #print data
-    alarmname = (data.split('top.document.title="'))[1].split('";')[0]
-    print "Alarm Name: ", alarmname
-    AreaNames = (data.split('tbl_areanam = new Array('))[1].split(');')[0].split(',')
-    print "Area Names: ", AreaNames
-    ZoneNames = (data.split('tbl_zone = new Array('))[1].split(');')[0].split(',')
-    print "Zone Names & Partition assignment: ", ZoneNames
-    s.close()
-
-    TotalZones = int(round(len(ZoneNames)/2))
-
-    print "Zone Names (Total: " + str(TotalZones) + "): ", ZoneNames
-
-    ZoneStatuses = array.array('i', (-1 for i in range(1, TotalZones+2)))
-
-    AlarmStatus = [None] * TotalZones
-
-    SirenStatus = "empty"
-
-    start_time = time.time()
-
-    print "Connected and polling data every " + str(Poll_Speed) + "s"
+    State_Machine = 0
 
     while True:
 
-        print(".")
+    # -------------- Read Config file ----------------
 
-        s = connect_ip150socket(IP150_IP, IP150_Port)
+        if State_Machine == 0:
 
-        elapsed_time = time.time() - start_time
-        #print "Time elapsed: ", elapsed_time
+            try:
 
-        if elapsed_time > 5:
-            start_time = time.time()
+                Config = ConfigParser.ConfigParser()
+                Config.read("config.ini")
+                passw = Config.get("IP150","Password")
+                user = Config.get("IP150","Pincode")
+                IP150_IP = Config.get("IP150","IP")
+                IP150_Port = int(Config.get("IP150","HTTP_Port"))
 
-            keep_alive_url = "/keep_alive.html?msgid=1" + "&" + str(random.randint(0,99999999999999999))
+                MQTT_IP = Config.get("MQTT Broker","IP")
+                MQTT_Port = int(Config.get("MQTT Broker","Port"))
 
-            #print "Requesting /keep_alive.html"
-            data, s = connect_ip150readData(s, "GET " + keep_alive_url + " HTTP/1.1\r\nHost: " + IP150_IP + ':' + str(IP150_Port) + "\r\nConnection: keep-alive\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.94 Safari/537.36\r\nAccept: */*;q=0.8\r\nReferer: http://" + IP150_IP + ':' + str(IP150_Port) + "/menu.html\r\nAccept-Encoding: gzip, deflate, sdch\r\nAccept-Language: en,af;q=0.8,en-GB;q=0.6\r\n\r\n")
-            if "200 OK" in data:
-                #print "Keep-alive 200 OK received from IP Module"
-                print "-"
-            #print data
-            s.close()
+                print "config.ini file read"
+                State_Machine = 1
+
+            except Exception, e:
+                print "Error reading config.ini file (exiting): " + repr(e)
+                sys.exit()
+
+        # -------------- MQTT ----------------
+
+        elif State_Machine == 1:
+            attempts = 3
+
+            try:
+
+                print "Attempting connection to MQTT Broker: " + MQTT_IP + ":" + str(MQTT_Port)
+                client = mqtt.Client()
+                client.on_connect = on_connect
+                client.on_message = on_message
+
+                client.connect(MQTT_IP, MQTT_Port, MQTT_KeepAlive)
+
+                # Blocking call that processes network traffic, dispatches callbacks and
+                # handles reconnecting.
+                # Other loop*() functions are available that give a threaded interface and a
+                # manual interface.
+                # client.loop_forever()
+
+                # client.disconnect()
+
+                client.loop_start()
+
+                client.subscribe(MQTT_Control_Subscribe + "#")
+
+                print "Connected to MQTT Broker"
+
+                State_Machine = 2
+
+            except Exception, e:
+
+                print "MQTT connection error (" + str(attempts) + ": " + repr(e)
+                time.sleep(Poll_Speed * 5)
+                attempts = attempts - 1
+
+                if attempts < 1:
+                    print "Error within State_Machine: " + str(State_Machine) + ": " + repr(e)
+                    State_Machine = State_Machine - 1
+                    print "Going to State_Machine: " + str(State_Machine)
+
+
+
+        # -------------- Login to IP Module ----------------
+
+        elif State_Machine == 2 and Polling_Enabled == 1:
+
+            attempts = 5
+
+            try:
+
+                print "Attempting connection to IP module: " + IP150_IP + ":" + str(IP150_Port)
+
+                u, p, s = connect_ip150login()
+
+                s.close()
+                # Get zone definitions
+                print "Get zone definitions"
+                s = connect_ip150socket(IP150_IP, IP150_Port)
+
+                data, s = connect_ip150readData(s, "GET /index.html HTTP/1.1\r\nHost: " + IP150_IP + ':' + str(IP150_Port) + "\r\nConnection: keep-alive\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nUpgrade-Insecure-Requests: 1\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.94 Safari/537.36\r\nReferer: http://" + IP150_IP + ':' + str(IP150_Port) + "/default.html?u=" + u + "&p=" + p + "\r\nAccept-Encoding: gzip, deflate, sdch\r\nAccept-Language: en,af;q=0.8,en-GB;q=0.6\r\n\r\n")
+                #print data
+                alarmname = (data.split('top.document.title="'))[1].split('";')[0]
+                print "Alarm Name: ", alarmname
+                AreaNames = (data.split('tbl_areanam = new Array('))[1].split(');')[0].split(',')
+                print "Area Names: ", AreaNames
+                ZoneNames = (data.split('tbl_zone = new Array('))[1].split(');')[0].split(',')
+                print "Zone Names & Partition assignment: ", ZoneNames
+                s.close()
+
+                TotalZones = int(round(len(ZoneNames)/2))
+
+                print "Zone Names (Total: " + str(TotalZones) + "): ", ZoneNames
+
+                ZoneStatuses = array.array('i', (-1 for i in range(1, TotalZones+2)))
+
+                AlarmStatus = [None] * TotalZones
+
+                SirenStatus = "empty"
+
+                start_time = time.time()
+
+                State_Machine = 3
+
+                print "Going to State_Machine  " + str(State_Machine)
+
+                print "Connected and polling data every " + str(Poll_Speed) + "s"
+
+            except Exception, e:
+
+                print "Error attempting login to IP module (" + str(attempts) + ": " + repr(e)
+                time.sleep(Poll_Speed * 5)
+                attempts = attempts - 1
+
+                if attempts < 1:
+                    print "Error within State_Machine: " + str(State_Machine) + ": " + repr(e)
+                    State_Machine = State_Machine - 1
+                    print "Going to State_Machine: " + str(State_Machine)
+
+        # -------------- Polling IP Module ----------------
+
+        elif State_Machine == 3 and Polling_Enabled == 1:
+
+            try:
+
+                print(".")
+
+                s = connect_ip150socket(IP150_IP, IP150_Port)
+
+                elapsed_time = time.time() - start_time
+                #print "Time elapsed: ", elapsed_time
+
+                if elapsed_time > 5:
+                    start_time = time.time()
+
+                    keep_alive_url = "/keep_alive.html?msgid=1" + "&" + str(random.randint(0,99999999999999999))
+
+                    #print "Requesting /keep_alive.html"
+                    data, s = connect_ip150readData(s, "GET " + keep_alive_url + " HTTP/1.1\r\nHost: " + IP150_IP + ':' + str(IP150_Port) + "\r\nConnection: keep-alive\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.94 Safari/537.36\r\nAccept: */*;q=0.8\r\nReferer: http://" + IP150_IP + ':' + str(IP150_Port) + "/menu.html\r\nAccept-Encoding: gzip, deflate, sdch\r\nAccept-Language: en,af;q=0.8,en-GB;q=0.6\r\n\r\n")
+                    if "200 OK" in data:
+                        #print "Keep-alive 200 OK received from IP Module"
+                        print "-"
+                    #print data
+                    s.close()
+                    s = connect_ip150socket(IP150_IP, IP150_Port)
+
+                data, s = connect_ip150readData(s,"GET /statuslive.html?u=" + u + "&p=" + p + " HTTP/1.1\r\nHost: " + IP150_IP + ':' + str(IP150_Port) + "\r\nConnection: keep-alive\r\nCache-Control: max-age=0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nUpgrade-Insecure-Requests: 1\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.94 Safari/537.36\r\nAccept-Encoding: gzip, deflate, sdch\r\nAccept-Language: en,af;q=0.8,en-GB;q=0.6\r\n\r\n")
+
+                zones = (data.split('tbl_statuszone = new Array'))[1].split(';var')[0]
+
+                for counter in range (1,TotalZones+1,1):
+                    if ZoneStatuses[counter] != int(zones[counter*2-1]):
+                        ZoneStatuses[counter] = int(zones[counter*2-1])
+                        client.publish("Paradox/ZS/Z" + str(counter), "S:" + str(ZoneStatuses[counter]) + ",P:" + ZoneNames[counter*2-2] + ",N:" + ZoneNames[counter*2-1], qos=0, retain=False)
+
+
+                AlarmStatusRead = (data.split('tbl_useraccess = new Array('))[1].split(')')[0].split(',')
+
+                for c, val in enumerate(AlarmStatusRead):
+                    if AlarmStatus[c] != val:
+                        if val == '1':
+                            newstate = "Disarmed"
+                        elif val == '2':
+                            newstate = "Armed"
+                        elif val == '3':
+                            newstate = "Stay"
+                        elif val == '4':
+                            newstate = "Sleep"
+                        else:
+                            newstate = "Unsure"
+
+                        client.publish("Paradox/AS/P" + str(c+1), newstate, qos=0, retain=False)
+                AlarmStatus = AlarmStatusRead
+
+                SirenStatusRead = (data.split('tbl_alarmes = new Array('))[1].split(')')[0]
+
+                if SirenStatusRead != SirenStatus:
+                    client.publish("Paradox/SS", str(SirenStatusRead), qos=0, retain=False)
+                    SirenStatus = SirenStatusRead
+
+
+
+                #print "Polling (i=", i, ") - , Zones: " + zones + " - ", AlarmStatus
+
+                s.close()
+
+                if Control_Action == 1:
+                    Control_Action = 0
+                    print "Preparing to send a control command"
+                    s = connect_ip150socket(IP150_IP, IP150_Port)
+
+                    data, s = connect_ip150readData(s, "GET /statuslive.html?area=0" + str(int(Control_Partition)-1) + "&value=" + Control_NewState + " HTTP/1.1\r\nHost: " + IP150_IP + ':' + str(IP150_Port) + "\r\nConnection: keep-alive\r\nCache-Control: max-age=0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nUpgrade-Insecure-Requests: 1\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.94 Safari/537.36\r\nAccept-Encoding: gzip, deflate, sdch\r\nAccept-Language: en,af;q=0.8,en-GB;q=0.6\r\n\r\n")
+
+                    time.sleep(1)  # Short delay to ensure status is updated before reading again
+                    s.close()
+
+                time.sleep(Poll_Speed)
+
+            except Exception, e:
+                print "Error within State_Machine: " + str(State_Machine) + ": " + repr(e)
+                State_Machine = State_Machine - 1
+                print "Going to State_Machine: " + str(State_Machine)
+
+        elif Polling_Enabled == 0 and State_Machine <= 3:
+
+            print "Disabling polling"
             s = connect_ip150socket(IP150_IP, IP150_Port)
-
-        data, s = connect_ip150readData(s,"GET /statuslive.html?u=" + u + "&p=" + p + " HTTP/1.1\r\nHost: " + IP150_IP + ':' + str(IP150_Port) + "\r\nConnection: keep-alive\r\nCache-Control: max-age=0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nUpgrade-Insecure-Requests: 1\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.94 Safari/537.36\r\nAccept-Encoding: gzip, deflate, sdch\r\nAccept-Language: en,af;q=0.8,en-GB;q=0.6\r\n\r\n")
-
-        zones = (data.split('tbl_statuszone = new Array'))[1].split(';var')[0]
-
-        for counter in range (1,TotalZones+1,1):
-            if ZoneStatuses[counter] != int(zones[counter*2-1]):
-                ZoneStatuses[counter] = int(zones[counter*2-1])
-                client.publish("Paradox/ZS/Z" + str(counter), "S:" + str(ZoneStatuses[counter]) + ",P:" + ZoneNames[counter*2-2] + ",N:" + ZoneNames[counter*2-1], qos=0, retain=False)
-
-
-        AlarmStatusRead = (data.split('tbl_useraccess = new Array('))[1].split(')')[0].split(',')
-
-        for c, val in enumerate(AlarmStatusRead):
-            if AlarmStatus[c] != val:
-                if val == '1':
-                    newstate = "Disarmed"
-                elif val == '2':
-                    newstate = "Armed"
-                elif val == '3':
-                    newstate = "Stay"
-                elif val == '4':
-                    newstate = "Sleep"
-                else:
-                    newstate = "Unsure"
-
-                client.publish("Paradox/AS/P" + str(c+1), newstate, qos=0, retain=False)
-        AlarmStatus = AlarmStatusRead
-
-        SirenStatusRead = (data.split('tbl_alarmes = new Array('))[1].split(')')[0]
-
-        if SirenStatusRead != SirenStatus:
-            client.publish("Paradox/SS", str(SirenStatusRead), qos=0, retain=False)
-            SirenStatus = SirenStatusRead
-
-
-
-        #print "Polling (i=", i, ") - , Zones: " + zones + " - ", AlarmStatus
-
-        s.close()
-
-        if Control_Action == 1:
-            Control_Action = 0
-            print "Preparing to send a control command"
-            s = connect_ip150socket(IP150_IP, IP150_Port)
-
-            data, s = connect_ip150readData(s, "GET /statuslive.html?area=0" + str(int(Control_Partition)-1) + "&value=" + Control_NewState + " HTTP/1.1\r\nHost: " + IP150_IP + ':' + str(IP150_Port) + "\r\nConnection: keep-alive\r\nCache-Control: max-age=0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nUpgrade-Insecure-Requests: 1\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.94 Safari/537.36\r\nAccept-Encoding: gzip, deflate, sdch\r\nAccept-Language: en,af;q=0.8,en-GB;q=0.6\r\n\r\n")
-
-            time.sleep(1)  # Short delay to ensure status is updated before reading again
+            data_read, s = connect_ip150readData(s, "GET /logout.html HTTP/1.1\r\nHost: " + IP150_IP + ':' + str(IP150_Port) + "\r\nConnection: keep-alive\r\nCache-Control: max-age=0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nUpgrade-Insecure-Requests: 1\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.94 Safari/537.36\r\nAccept-Encoding: gzip, deflate, sdch\r\nAccept-Language: en,af;q=0.8,en-GB;q=0.6\r\n\r\n")
+            if "200 OK" in data_read:
+                print "Disconnect OK received from IP Module"
             s.close()
 
-        time.sleep(Poll_Speed)
+            State_Machine = 10
 
+            print "Polling Disabled"
+
+        elif Polling_Enabled == 1:
+            State_Machine = 2
+
+        elif State_Machine == 10:
+
+            time.sleep(3)
