@@ -328,7 +328,7 @@ if __name__ == '__main__':
 
     print "Connected and polling data every " + str(Poll_Speed) + "s"
 
-    for i in range(0,100000,1):
+    while True:
 
         print(".")
 
@@ -403,58 +403,3 @@ if __name__ == '__main__':
 
         time.sleep(Poll_Speed)
 
-
-
-#-----------------------------------------------------------------------------------------
-
-    #Test disarming alarm => ?area=00&value=d
-    print "Disabling Partition 1"
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.settimeout(2)
-    s.connect((IP150_IP, IP150_Port))
-
-    s.send("GET /statuslive.html?area=00&value=d HTTP/1.1\r\nHost: " + IP150_IP + ':' + str(IP150_Port) + "\r\nConnection: keep-alive\r\nCache-Control: max-age=0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nUpgrade-Insecure-Requests: 1\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.94 Safari/537.36\r\nAccept-Encoding: gzip, deflate, sdch\r\nAccept-Language: en,af;q=0.8,en-GB;q=0.6\r\n\r\n")
-
-    data = s.recv(4096)
-    data += s.recv(4096)
-
-    time.sleep(2)   #Short delay to ensure status is updated before reading again
-    s.close()
-
-    #Resend after alarm status change to get updated value
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.settimeout(2)
-    s.connect((IP150_IP, IP150_Port))
-
-    s.send("GET /statuslive.html?area=00&value=d HTTP/1.1\r\nHost: " + IP150_IP + ':' + str(IP150_Port) + "\r\nConnection: keep-alive\r\nCache-Control: max-age=0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nUpgrade-Insecure-Requests: 1\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.94 Safari/537.36\r\nAccept-Encoding: gzip, deflate, sdch\r\nAccept-Language: en,af;q=0.8,en-GB;q=0.6\r\n\r\n")
-
-    data = s.recv(4096)
-    data += s.recv(4096)
-
-    #print data
-    alarmstatus = (data.split('tbl_useraccess = new Array('))[1].split(')')[0]
-    if int(alarmstatus[0]) == 1:
-        state1 = "Partition 1 - Disarmed"
-    elif int(alarmstatus[0]) == 2:
-        state1 = "Partition 1 - Armed"
-    elif int(alarmstatus[0]) == 3:
-        state1 = "Partition 1 - Stay"
-    elif int(alarmstatus[0]) == 4:
-        state1 = "Partition 1 - Sleep"
-    else:
-        state1 = "Partition 1 - Unsure"
-
-    print state1
-
-    s.close()
-
-    #Disconnect from alarm
-    print "Disconneting from alarm"
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.settimeout(2)
-    s.connect((IP150_IP, IP150_Port))
-    s.send("GET /logout.html HTTP/1.1\r\nHost: " + IP150_IP + ':' + str(IP150_Port) + "\r\nConnection: keep-alive\r\nCache-Control: max-age=0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nUpgrade-Insecure-Requests: 1\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.94 Safari/537.36\r\nAccept-Encoding: gzip, deflate, sdch\r\nAccept-Language: en,af;q=0.8,en-GB;q=0.6\r\n\r\n")
-    data = s.recv(4096)
-    if "200 OK" in data:
-        print "Disconnect OK received from IP Module"
-    s.close()
