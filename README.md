@@ -31,3 +31,9 @@ If successfully connected to your IP150 and MQTT broker, the app will start off 
     * <b>Paradox/C/P1/Disarm</b>
     * (C = Control; P = Partition, followed by number; Then the action = Disarm / Arm / Sleep / Stay)
     * The payload is not evaluated
+* Controlling this application
+  * Publish the following topics to enable/disable polling of the IP module:
+    * <b>Paradox/C/Polling/Enable</b>
+    * <b>Paradox/C/Polling/Disable</b>
+    * The payload is not evaluated
+
