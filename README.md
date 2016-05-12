@@ -10,7 +10,7 @@ Python-based IP150 interrogator that publishes data and subscribes to control co
 3.  Run the script: Python IP150-MQTT.py
 
 ## What to expect:
-If successfully connected to your IP150 and MQTT broker, the app will start off by publishing all current zone and partition statuses. The following topics are available (and there names are configurable in the config.ini file):
+If successfully connected to your IP150 and MQTT broker, the app will start off by publishing all current zone and partition statuses. The following topics are available (and their names are configurable in the config.ini file):
 * Zone Statuses:
   * Topic: <b>Paradox/ZS/Z1</b>
   * (ZS = Zone Statuses; Z = Zone; followed by the number that has changed)
