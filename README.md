@@ -10,12 +10,12 @@ Python-based IP150 interrogator that publishes data and subscribes to control co
 3.  Run the script: Python IP150-MQTT.py
 
 ## What to expect:
-If successfully connected to your IP150 and MQTT broker, the app will start off by publishing all current zone and partition statuses. The following topics are hardcoded:
+If successfully connected to your IP150 and MQTT broker, the app will start off by publishing all current zone and partition statuses. The following topics are available (and there names are configurable in the config.ini file):
 * Zone Statuses:
   * Topic: <b>Paradox/ZS/Z1</b>
   * (ZS = Zone Statuses; Z = Zone; followed by the number that has changed)
-    * Payload (example): <b>S:0,P:1,N:"Front PIR"</b>
-    * (S = Status: 0 = Close, 1 = Open; P = Partition number, followed by the zone name)
+    * Payload (example): <b>S:OPEN,P:1,N:"Front PIR"</b>
+    * (S = Status: OPEN / CLOSE (configurable in the config.ini file); P = Partition number, followed by the zone name)
 * Alarm Statuses:
   * Topic: <b>Paradox/AS/P1</b>
   * (AS = Alarm Status (Arm, Disarm, etc.); P = Partition, followed by the partition number)
@@ -35,7 +35,9 @@ If successfully connected to your IP150 and MQTT broker, the app will start off 
   * Publish the following topics to enable/disable polling of the IP module:
     * <b>Paradox/C/Polling/Enable</b>
     * <b>Paradox/C/Polling/Disable</b>
-    * The payload is not evaluated
+    * The payload is not evaluated.
+
+<b>Note: If you modified the subscription topic for controls in the config.ini file ensure it ends with a '/'.</b>
 
 
 ## Running as a service / daemon
