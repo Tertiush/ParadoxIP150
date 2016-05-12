@@ -17,8 +17,15 @@ Poll_Speed = 0.5                            #Seconds (float)
 MQTT_IP = "10.0.0.130"
 MQTT_Port = 1883
 MQTT_KeepAlive = 60                         #Seconds
+
 MQTT_Control_Subscribe = "Paradox/C/"       #e.g. To arm partition 1: Paradox/C/P1/Arm
                                             #Options are Arm, Disarm, Stay, Sleep (case sensitive!)
+Topic_Publish_Zone_States = "Paradox/ZS"
+Topic_Publish_Siren_Status = "Paradox/SS"
+Topic_Publish_Alarm_States = "Paradox/AS"
+Payload_Publish_Zone_States_1 = "OPEN"
+Payload_Publish_Zone_States_0 = "CLOSED"
+
 
 #Global variables
 Control_Action = 0
@@ -96,7 +103,7 @@ def d2h(d):
 
 
 def on_connect(client, userdata, flags, rc):
-    print("Connected with result code "+str(rc))
+    print("Connected to MQTT broker with result code "+str(rc))
 
     # Subscribing in on_connect() means that if we lose the connection and
     # reconnect then subscriptions will be renewed.
@@ -187,7 +194,7 @@ def connect_ip150login():
                 print "Last received data: "
                 print data_read
                 print "******************* Attempting to login again *******************"
-                sys.exit()
+                #sys.exit()
             time.sleep(2)
 
             socketclient = connect_ip150socket(IP150_IP, IP150_Port)
@@ -196,11 +203,13 @@ def connect_ip150login():
                 print "Disconnect OK received from IP Module"
             socketclient.close()
 
+            if 'window.location = "https://' in data_read:
+                print "******************* HTTPS Port is enabled, disable in IP module to continue *******************"
+                sys.exit()
+
             time.sleep(2)
 
 
-            # print "received data:", data
-            #    s.close()
 
     passw_md5 = hashlib.md5()
     passw_md5.update(passw)
@@ -285,16 +294,21 @@ if __name__ == '__main__':
                 user = Config.get("IP150","Pincode")
                 IP150_IP = Config.get("IP150","IP")
                 IP150_Port = int(Config.get("IP150","HTTP_Port"))
+                Topic_Publish_Zone_States = Config.get("MQTT Topics","Topic_Publish_Zone_States")
+                Topic_Publish_Alarm_States = Config.get("MQTT Topics","Topic_Publish_Alarm_States")
+                MQTT_Control_Subscribe = Config.get("MQTT Topics","Topic_Subscribe_Control")
+                Topic_Publish_Siren_Status = Config.get("MQTT Topics","Topic_Publish_Siren_Status")
 
                 MQTT_IP = Config.get("MQTT Broker","IP")
                 MQTT_Port = int(Config.get("MQTT Broker","Port"))
 
-                print "config.ini file read"
+                print "config.ini file read successfully"
                 State_Machine = 1
 
             except Exception, e:
-                print "Error reading config.ini file (exiting): " + repr(e)
-                sys.exit()
+                print "******************* Error reading config.ini file (will use defaults): " + repr(e)
+                State_Machine = 1
+
 
         # -------------- MQTT ----------------
 
@@ -322,7 +336,7 @@ if __name__ == '__main__':
 
                 client.subscribe(MQTT_Control_Subscribe + "#")
 
-                print "Connected to MQTT Broker"
+                print "MQTT client subscribed to control messages on topic: " + MQTT_Control_Subscribe + "#"
 
                 State_Machine = 2
 
@@ -429,11 +443,15 @@ if __name__ == '__main__':
                 for counter in range (1,TotalZones+1,1):
                     if ZoneStatuses[counter] != int(zones[counter*2-1]):
                         ZoneStatuses[counter] = int(zones[counter*2-1])
-                        client.publish("Paradox/ZS/Z" + str(counter), "S:" + str(ZoneStatuses[counter]) + ",P:" + ZoneNames[counter*2-2] + ",N:" + ZoneNames[counter*2-1], qos=0, retain=False)
+                        if ZoneStatuses[counter] == 1:
+                            newZoneState = Payload_Publish_Zone_States_1
+                        else:
+                            newZoneState = Payload_Publish_Zone_States_0
+                        client.publish(Topic_Publish_Zone_States + "/Z" + str(counter), "S:" + newZoneState + ",P:" + ZoneNames[counter*2-2] + ",N:" + ZoneNames[counter*2-1], qos=0, retain=False)
 
 
                 AlarmStatusRead = (data.split('tbl_useraccess = new Array('))[1].split(')')[0].split(',')
-
+                #print "AlarmStatusRead: " + repr(AlarmStatusRead)
                 for c, val in enumerate(AlarmStatusRead):
                     if AlarmStatus[c] != val:
                         if val == '1':
@@ -444,16 +462,18 @@ if __name__ == '__main__':
                             newstate = "Stay"
                         elif val == '4':
                             newstate = "Sleep"
+                        elif val == '5':
+                            newstate = "Stay"
                         else:
                             newstate = "Unsure"
 
-                        client.publish("Paradox/AS/P" + str(c+1), newstate, qos=0, retain=False)
+                        client.publish(Topic_Publish_Alarm_States + "/P" + str(c+1), newstate, qos=0, retain=False)
                 AlarmStatus = AlarmStatusRead
 
                 SirenStatusRead = (data.split('tbl_alarmes = new Array('))[1].split(')')[0]
 
                 if SirenStatusRead != SirenStatus:
-                    client.publish("Paradox/SS", str(SirenStatusRead), qos=0, retain=False)
+                    client.publish(Topic_Publish_Siren_Status , str(SirenStatusRead), qos=0, retain=False)
                     SirenStatus = SirenStatusRead
 
 
