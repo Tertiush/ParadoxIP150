@@ -464,8 +464,12 @@ if __name__ == '__main__':
                             newstate = "Sleep"
                         elif val == '5':
                             newstate = "Stay"
+                        elif val == '6':
+                            newstate = "Entry Delay"
+                        elif val == '7':
+                            newstate = "Exit Delay"
                         else:
-                            newstate = "Unsure"
+                            newstate = "Unsure: (" + val + ")"
 
                         client.publish(Topic_Publish_Alarm_States + "/P" + str(c+1), newstate, qos=0, retain=False)
                 AlarmStatus = AlarmStatusRead
