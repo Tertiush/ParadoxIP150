@@ -3,6 +3,8 @@ Python-based IP150 interrogator that publishes data and subscribes to control co
 
 <b>NB: This is still a very early release and has its bugs</b>
 
+<b>Another version of this script (using the software port & also has access to alarm outputs (PGMs)) is available in my ParadoxIP150v2 repository. Tested only with MG5050 V4, for other variants I hope the community will assist with PRs.</b>
+
 ## Steps to use it:
 1.  Tested with Python 2.7.10
 2.  Download the files in this repository and place it in some directory
